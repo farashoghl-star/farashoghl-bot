@@ -1,4 +1,4 @@
-// index.js (نسخه نهایی تمیز و کامل)
+// index.js (نسخه نهایی و کامل با پیام پایانی و دکمه‌ها)
 import express from "express";
 import bodyParser from "body-parser";
 import { Telegraf, Markup } from "telegraf";
@@ -246,7 +246,7 @@ bot.on("text", async (ctx) => {
   await sendGiftAndLead(ctx, type, norm);
 });
 
-// ---- Send gift and admin lead ----
+// ---- Send gift, final message & admin lead ----
 async function sendGiftAndLead(ctx, type, phone) {
   const u = ctx.from;
 
@@ -254,17 +254,38 @@ async function sendGiftAndLead(ctx, type, phone) {
   await ctx.reply("در حال ارسال هدیه مخصوص تو هستیم... 🎁");
 
   try {
-    await ctx.replyWithDocument({ url: type.giftFile, filename: "Farashoghl_Gift.pdf" });
+    await ctx.replyWithDocument({
+      url: type.giftFile,
+      filename: "Farashoghl_Gift.pdf"
+    });
   } catch (err) {
     await ctx.reply(
-      "❗️ارسال مستقیم فایل ممکن نشد. می‌تونی از این لینک دانلودش کنی:\n" + type.giftFile
+      "❗️ارسال مستقیم فایل ممکن نشد. می‌تونی از این لینک دانلودش کنی:\n" +
+        type.giftFile
     );
   }
 
-  await ctx.reply(
-    `📣 به جامعه فراشغل بپیوند:\nhttps://t.me/+RXtqgGDCVvE0MmE0`
+  await ctx.reply(`📣 به جامعه فراشغل بپیوند:\nhttps://t.me/+RXtqgGDCVvE0MmE0`);
+
+  // ---- Follow-up Message with Inline Buttons ----
+  await ctx.replyWithMarkdown(
+    `💬 *دوست عزیز؛*\n\n` +
+      `در *فراشغل* قراره مسیر درست زندگی و شغلی خودت رو پیدا کنی و با سرمایه کم به درآمد برسی.\n\n` +
+      `📚 پس دیگر محصولات و آموزش‌های رایگان مرکز توانمندسازی، آموزش و مشاوره کارآفرینی فراشغل را در آدرس زیر مشاهده کن:\n` +
+      `[🌐 farashoghl.ir](https://farashoghl.ir/)\n\n` +
+      `📞 جهت رزرو مشاوره و جلسات کوچینگ تخصصی شغلی در *واتساپ* به شماره زیر پیام بده:\n` +
+      `👉 09357820120\n\n` +
+      `به امید حق 🌟\n` +
+      `ثروتمند و سعادتمند در دنیا و آخرت باشید 🙏`,
+    Markup.inlineKeyboard([
+      [
+        Markup.button.url("🌐 مشاهده سایت فراشغل", "https://farashoghl.ir/"),
+        Markup.button.url("💬 پیام در واتساپ", "https://wa.me/989357820120")
+      ]
+    ])
   );
 
+  // ---- Send lead to admin ----
   const lead = [
     "📥 لید جدید «نقشه گنج»:",
     `نام: ${u.first_name || ""} ${u.last_name || ""}`.trim(),
@@ -279,6 +300,7 @@ async function sendGiftAndLead(ctx, type, phone) {
   await ctx.telegram.sendMessage(ADMIN_CHANNEL_ID, lead, {
     disable_web_page_preview: true
   });
+
   await ctx.reply("اگر دوست داری دوباره تست بدی: /start", Markup.removeKeyboard());
 }
 
