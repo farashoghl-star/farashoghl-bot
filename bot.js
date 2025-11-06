@@ -1,4 +1,4 @@
-// index.js 
+// index.js (نسخه تمیز)
 import express from "express";
 import bodyParser from "body-parser";
 import { Telegraf, Markup } from "telegraf";
