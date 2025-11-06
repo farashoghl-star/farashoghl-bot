@@ -201,8 +201,8 @@ bot.on("text", async (ctx) => {
 
   const type = getTypeByScore(st.score) || TYPES[3];
   const gifts =
-    `🎁 هدیه اختصاصی تو آماده‌ی دانلوده:\n${type.giftLink}\n\n` +
-    `📣 به جامعه فراشغل بپیوند:\nhttps://YOUR_CHANNEL_INVITE_LINK`;
+    `🎁 هدیه اختصاصی تو آماده‌ی دانلوده:\n${https://farashoghl.ir/wp-content/uploads/2025/09/razhaye_mamnoe_mashaghl.pdf}\n\n` +
+    `📣 به جامعه فراشغل بپیوند:\nhttps://t.me/+RXtqgGDCVvE0MmE0`;
 
   await ctx.reply(`✅ شماره‌ات ثبت شد: ${norm}`);
   await ctx.reply(gifts);
