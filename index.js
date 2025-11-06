@@ -162,7 +162,7 @@ bot.on("contact", async (ctx) => {
   const type = getTypeByScore(st.score) || TYPES[3];
   const gifts =
     `🎁 هدیه اختصاصی تو آماده‌ی دانلوده:\n${type.giftLink}\n\n` +
-    `📣 به جامعه فراشغل بپیوند:\nhttps://YOUR_CHANNEL_INVITE_LINK`;
+    `📣 به جامعه فراشغل بپیوند:\nhttps://t.me/+RXtqgGDCVvE0MmE0`;
 
   await ctx.reply(`✅ دریافت شد! شماره‌ات ثبت شد: ${phone}`);
   await ctx.reply(gifts);
