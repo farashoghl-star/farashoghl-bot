@@ -58,6 +58,31 @@ const TYPES = [
 // ---- In-memory state ----
 const userState = new Map();
 
+// -- helpers: normalize phone from FA/AR digits & various formats --
+function fa2en(str) {
+  if (!str) return str;
+  const fa = ["۰","۱","۲","۳","۴","۵","۶","۷","۸","۹"];
+  const ar = ["٠","١","٢","٣","٤","٥","٦","٧","٨","٩"];
+  return str.split("").map(ch => {
+    const fi = fa.indexOf(ch);
+    if (fi > -1) return String(fi);
+    const ai = ar.indexOf(ch);
+    if (ai > -1) return String(ai);
+    return ch;
+  }).join("");
+}
+function normalizePhone(input) {
+  if (!input) return null;
+  let s = fa2en(input).replace(/\s|-/g, "");
+  if (s.startsWith("+98")) s = s.replace("+98", "0");
+  if (s.startsWith("0098")) s = s.replace("0098", "0");
+  if (s.startsWith("98")) s = s.replace("98", "0");
+  if (/^9\d{9}$/.test(s)) s = "0" + s;      // e.g. 912... -> 0912...
+  if (/^0\d{10}$/.test(s)) return s.replace(/^0/, "+98"); // -> +98912...
+  if (/^\+98\d{10}$/.test(s)) return s;
+  return null;
+}
+
 function getTypeByScore(score) {
   return TYPES.find(t => score >= t.range[0] && score <= t.range[1]);
 }
@@ -88,12 +113,14 @@ async function showResult(ctx) {
     `🎉 تموم شد!\n\nامتیاز تو: *${st.score}* از *${QUESTIONS.length}*` +
     `\nتیپ تو: *${type.title}*\n${type.badge}\n\n«${type.slogan}»\n\n${type.analysis}`;
   const offers = `\n\n💼 پیشنهاد ویژه برای تو:\n• ${type.offers.join("\n• ")}`;
-  const askPhone = `\n\n🎁 هدیه اختصاصی و تحلیل کامل رو همین الان بگیر.\n` +
-                   `لطفاً شماره موبایل‌ت رو با دکمه زیر ارسال کن.`;
+  const askPhone = const askPhone = `\n\n🎁 هدیه اختصاصی و تحلیل کامل رو همین الان بگیر.\n` +
+                 `- با موبایل: دکمه زیر را بزن.\n- با دسکتاپ/وب: شماره‌ات را به صورت متن بفرست (مثال: 0912xxxxxxx).`;
 
   await ctx.replyWithMarkdown(header + offers + askPhone,
     Markup.keyboard([ Markup.button.contactRequest("📱 ارسال شماره موبایل") ])
       .oneTime().resize()
+                              st.awaitingPhone = true;
+
   );
 }
 
@@ -113,6 +140,7 @@ bot.action(["ans_yes","ans_no"], async (ctx) => {
   await ctx.answerCbQuery();
   const st = userState.get(ctx.from.id);
   if (!st) return ctx.reply("برای شروع /start رو بزن.");
+st.awaitingPhone = false;
 
   const isYes = ctx.match[0] === "ans_yes";
   st.answers.push(isYes ? "بله" : "خیر");
@@ -148,6 +176,46 @@ bot.on("contact", async (ctx) => {
     `امتیاز: ${st.score}/${QUESTIONS.length}`,
     `تیپ: ${type.title}`,
     `موبایل: ${phone}`,
+    `پاسخ‌ها: ${st.answers.join(", ")}`
+  ].join("\n");
+
+  await ctx.telegram.sendMessage(ADMIN_CHANNEL_ID, lead, { disable_web_page_preview: true });
+  await ctx.reply("اگر دوست داری دوباره تست بدی: /start", Markup.removeKeyboard());
+});
+bot.on("text", async (ctx) => {
+  const st = userState.get(ctx.from.id);
+  if (!st || !st.awaitingPhone) return; // فقط وقتی منتظر شماره‌ایم
+
+  const raw = ctx.message.text || "";
+  const norm = normalizePhone(raw);
+  if (!norm) {
+    return ctx.reply(
+      "❗️فرمت شماره معتبر نیست.\n" +
+      "نمونه درست: 0912xxxxxxx یا +98912xxxxxxx\n" +
+      "اگر با موبایل هستی، دکمه «📱 ارسال شماره موبایل» را بزن."
+    );
+  }
+
+  st.awaitingPhone = false;
+  st.phone = norm;
+
+  const type = getTypeByScore(st.score) || TYPES[3];
+  const gifts =
+    `🎁 هدیه اختصاصی تو آماده‌ی دانلوده:\n${type.giftLink}\n\n` +
+    `📣 به جامعه فراشغل بپیوند:\nhttps://YOUR_CHANNEL_INVITE_LINK`;
+
+  await ctx.reply(`✅ شماره‌ات ثبت شد: ${norm}`);
+  await ctx.reply(gifts);
+
+  const u = ctx.from;
+  const lead = [
+    "📥 لید جدید «نقشه گنج»:",
+    `نام: ${u.first_name || ""} ${u.last_name || ""}`.trim(),
+    `یوزرنیم: @${u.username || "—"}`,
+    `ID: ${u.id}`,
+    `امتیاز: ${st.score}/${QUESTIONS.length}`,
+    `تیپ: ${type.title}`,
+    `موبایل: ${norm}`,
     `پاسخ‌ها: ${st.answers.join(", ")}`
   ].join("\n");
 
