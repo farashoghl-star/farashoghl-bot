@@ -1,11 +1,11 @@
-// index.js (نسخه نهایی و کامل با پیام پایانی و دکمه‌ها)
+// ====== Farashoghl Quiz Bot (Final Clean Version) ======
 import express from "express";
 import bodyParser from "body-parser";
 import { Telegraf, Markup } from "telegraf";
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
-const ADMIN_CHANNEL_ID = process.env.ADMIN_CHANNEL_ID; // -100...
-const PUBLIC_URL = process.env.PUBLIC_URL; // https://...onrender.com
+const ADMIN_CHANNEL_ID = process.env.ADMIN_CHANNEL_ID;
+const PUBLIC_URL = process.env.PUBLIC_URL;
 
 if (!BOT_TOKEN || !ADMIN_CHANNEL_ID || !PUBLIC_URL) {
   throw new Error("Set BOT_TOKEN, ADMIN_CHANNEL_ID, PUBLIC_URL env vars.");
@@ -14,7 +14,7 @@ if (!BOT_TOKEN || !ADMIN_CHANNEL_ID || !PUBLIC_URL) {
 const bot = new Telegraf(BOT_TOKEN);
 const app = express();
 
-// ---- Quiz Questions ----
+// ---------- QUIZ QUESTIONS ----------
 const QUESTIONS = [
   "آیا دوست داری رئیس خودت باشی و به کسی پاسخ ندی؟",
   "آیا مدام دنبال فرصت‌های تازه برای درآمد هستی؟",
@@ -23,115 +23,62 @@ const QUESTIONS = [
   "از معرفی ایده یا محصولت به دیگران لذت می‌بری؟",
   "آیا حاضری چند ماه سخت کار کنی تا بعدش آزاد و ثروتمند بشی؟",
   "وقتی کاری رو شروع می‌کنی، تا تهش میری؟",
-  "کسی هست که از تصمیم شغلی‌ت حمایت کنه؟ (روحی/مالی)",
-  "باورت اینه که «حق با مشتریه»؟",
+  "آیا معتقدید برای رشد سریع‌تر، کمک گرفتن از یک مربی (کوچ) ضروری است؟",
+  "آیا فکر می‌کنید سرمایه اولیه کم، بهانه‌ای برای شروع نکردن نیست؟",
   "آیا به سرمایه‌گذاری روی خودت (یادگیری، زمان یا پول) ایمان داری؟"
 ];
 
-// ---- Personality Types ----
+// ---------- RESULT TYPES ----------
 const TYPES = [
-  {
-    range: [8, 10],
-    key: "leader",
-    title: "🦅 رهبر فرصت‌ها",
-    badge: "🏆 نشان طلایی رهبری",
-    slogan: "تو سازنده دنیای خودت هستی!",
-    analysis:
-      "تو ذهن و اراده‌ی یک کارآفرین واقعی داری. فقط با کوچ و استراتژی مسیرت رو متمرکز کن تا پروازت بلندتر بشه.",
-    offers: [
-      "کارگاه جامع استادی مشاغل",
-      "کوچینگ اختصاصی کسب‌وکار",
-      "کارگاه بازاریابی و تبلیغات حرفه‌ای"
-    ],
-    giftFile:
-      "https://farashoghl.ir/wp-content/uploads/2025/09/razhaye_mamnoe_mashaghl.pdf"
+  { range:[8,10], key:"leader", title:"🦅 رهبر فرصت‌ها", badge:"🏆 نشان طلایی رهبری",
+    slogan:"تو سازنده دنیای خودت هستی!",
+    analysis:"تو ذهن و اراده‌ی یک کارآفرین واقعی داری. فقط با کوچ و استراتژی مسیرت رو متمرکز کن تا پروازت بلندتر بشه.",
+    offers:["کارگاه جامع استادی مشاغل","کوچینگ اختصاصی کسب‌وکار","کارگاه بازاریابی و تبلیغات حرفه‌ای"],
+    giftLink:"https://farashoghl.ir/wp-content/uploads/2025/09/razhaye_mamnoe_mashaghl.pdf"
   },
-  {
-    range: [5, 7],
-    key: "seeker",
-    title: "🔥 جستجوگر مسیر",
-    badge: "💎 نشان نقره‌ای جستجو",
-    slogan: "تو آماده‌ای، فقط نقشه می‌خوای!",
-    analysis:
-      "نیمه‌ی راه رو رفتی. استعداد و انگیزه داری؛ با یادگیری مسیرسازی، سرعت رشدت چند برابر میشه.",
-    offers: [
-      "کارگاه رسالت و مسیریابی شغلی",
-      "کارگاه درآمدزایی از فضای مجازی",
-      "تست‌های استعدادیابی"
-    ],
-    giftFile:
-      "https://farashoghl.ir/wp-content/uploads/2025/09/razhaye_mamnoe_mashaghl.pdf"
+  { range:[5,7], key:"seeker", title:"🔥 جستجوگر مسیر", badge:"💎 نشان نقره‌ای جستجو",
+    slogan:"تو آماده‌ای، فقط نقشه می‌خوای!",
+    analysis:"نیمه‌ی راه رو رفتی. استعداد و انگیزه داری؛ با یادگیری مسیرسازی، سرعت رشدت چند برابر میشه.",
+    offers:["کارگاه رسالت و مسیریابی شغلی","کارگاه درآمدزایی از فضای مجازی","تست‌های استعدادیابی"],
+    giftLink:"https://farashoghl.ir/wp-content/uploads/2025/09/razhaye_mamnoe_mashaghl.pdf"
   },
-  {
-    range: [3, 4],
-    key: "designer",
-    title: "🌿 طراح آینده",
-    badge: "🧭 نشان برنزی مسیر",
-    slogan: "فکر بزرگ داری، وقتشه عمل کنی!",
-    analysis:
-      "تحلیل‌گر و دقیق هستی، اما گیرِ نقشه می‌افتی. با کوچینگ انگیزشی و خودشناسی، جهش می‌کنی.",
-    offers: [
-      "کارگاه کشف رسالت شغلی",
-      "کوچینگ انگیزشی",
-      "تست ارزش‌ها و شخصیت"
-    ],
-    giftFile:
-      "https://farashoghl.ir/wp-content/uploads/2025/09/razhaye_mamnoe_mashaghl.pdf"
+  { range:[3,4], key:"designer", title:"🌿 طراح آینده", badge:"🧭 نشان برنزی مسیر",
+    slogan:"فکر بزرگ داری، وقتشه عمل کنی!",
+    analysis:"تحلیل‌گر و دقیق هستی، اما گیر نقشه می‌افتی. با کوچینگ انگیزشی و خودشناسی، جهش می‌کنی.",
+    offers:["کارگاه کشف رسالت شغلی","کوچینگ انگیزشی","تست ارزش‌ها و شخصیت"],
+    giftLink:"https://farashoghl.ir/wp-content/uploads/2025/09/razhaye_mamnoe_mashaghl.pdf"
   },
-  {
-    range: [0, 2],
-    key: "raw",
-    title: "🌱 الماس خام",
-    badge: "💚 نشان سبز رشد",
-    slogan: "هر قهرمانی از همین‌جا شروع کرده.",
-    analysis:
-      "اول راهی، اما تصمیم به تغییر یعنی شروع رشد. با آموزش پایه و مشاوره، بنیان محکمی بساز.",
-    offers: [
-      "کارگاه‌های پایه‌ای فراشغل",
-      "تست‌های روانشناسی",
-      "مشاوره هدف‌گذاری"
-    ],
-    giftFile:
-      "https://farashoghl.ir/wp-content/uploads/2025/09/razhaye_mamnoe_mashaghl.pdf"
+  { range:[0,2], key:"raw", title:"🌱 الماس خام", badge:"💚 نشان سبز رشد",
+    slogan:"هر قهرمانی از همین‌جا شروع کرده.",
+    analysis:"اول راهی، اما تصمیم به تغییر یعنی شروع رشد. با آموزش پایه و مشاوره، بنیان محکمی بساز.",
+    offers:["کارگاه‌های پایه‌ای فراشغل","تست‌های روانشناسی","مشاوره هدف‌گذاری"],
+    giftLink:"https://farashoghl.ir/wp-content/uploads/2025/09/razhaye_mamnoe_mashaghl.pdf"
   }
 ];
 
-// ---- In-memory state ----
+// ---------- MOTIVATIONAL RESPONSES ----------
+const POSITIVE_REPLIES = [
+  "🔥 آفرین! این دقیقا طرز فکر یک کارآفرینه.",
+  "🚀 عالیه! همین ذهنیت مسیر موفقیتت رو می‌سازه.",
+  "💡 فوق‌العاده! دید تو نسبت به رشد درسته.",
+  "✨ همین طرز فکر باعث جهش توی مسیر شغلی میشه.",
+  "👏 قهرمانانه پاسخ دادی! این یعنی یه گام جلوتر از بقیه‌ای."
+];
+const NEGATIVE_REPLIES = [
+  "🌱 نگران نباش، همینکه داری بهش فکر می‌کنی یعنی در مسیر رشدی.",
+  "💭 خیلی‌ها از این نقطه شروع کردن؛ تو هم می‌تونی تغییر بدی.",
+  "🧩 مهم اینه که بدونی هر باوری قابل تغییره.",
+  "🌤 مسیر موفقیت از همین آگاهی شروع میشه.",
+  "💬 هر قدم کوچیک، تو رو به رشد واقعی نزدیک‌تر می‌کنه."
+];
+
 const userState = new Map();
 
-// ---- Helpers ----
-function fa2en(str) {
-  if (!str) return str;
-  const fa = ["۰", "۱", "۲", "۳", "۴", "۵", "۶", "۷", "۸", "۹"];
-  const ar = ["٠", "١", "٢", "٣", "٤", "٥", "٦", "٧", "٨", "٩"];
-  return str
-    .split("")
-    .map((ch) => {
-      const fi = fa.indexOf(ch);
-      if (fi > -1) return String(fi);
-      const ai = ar.indexOf(ch);
-      if (ai > -1) return String(ai);
-      return ch;
-    })
-    .join("");
-}
-function normalizePhone(input) {
-  if (!input) return null;
-  let s = fa2en(input).replace(/\s|-/g, "");
-  if (s.startsWith("+98")) s = s.replace("+98", "0");
-  if (s.startsWith("0098")) s = s.replace("0098", "0");
-  if (s.startsWith("98")) s = s.replace("98", "0");
-  if (/^9\d{9}$/.test(s)) s = "0" + s;
-  if (/^0\d{10}$/.test(s)) return s.replace(/^0/, "+98");
-  if (/^\+98\d{10}$/.test(s)) return s;
-  return null;
-}
-
+// ---------- QUIZ FLOW ----------
 function getTypeByScore(score) {
-  return TYPES.find((t) => score >= t.range[0] && score <= t.range[1]);
+  return TYPES.find(t => score >= t.range[0] && score <= t.range[1]);
 }
 
-// ---- Quiz Flow ----
 function startQuiz(ctx) {
   userState.set(ctx.from.id, { index: 0, score: 0, answers: [] });
   return askNext(ctx);
@@ -146,14 +93,12 @@ function askNext(ctx) {
   return ctx.reply(
     text,
     Markup.inlineKeyboard([
-      [
-        Markup.button.callback("✅ بله", "ans_yes"),
-        Markup.button.callback("❌ خیر", "ans_no")
-      ]
+      [Markup.button.callback("✅ بله", "ans_yes"), Markup.button.callback("❌ خیر", "ans_no")]
     ])
   );
 }
 
+// ---------- RESULT DISPLAY ----------
 async function showResult(ctx) {
   const st = userState.get(ctx.from.id);
   if (!st) return;
@@ -164,28 +109,21 @@ async function showResult(ctx) {
     `🎉 تموم شد!\n\nامتیاز تو: *${st.score}* از *${QUESTIONS.length}*` +
     `\nتیپ تو: *${type.title}*\n${type.badge}\n\n«${type.slogan}»\n\n${type.analysis}`;
   const offers = `\n\n💼 پیشنهاد ویژه برای تو:\n• ${type.offers.join("\n• ")}`;
-  const askPhone =
-    `\n\n🎁 هدیه اختصاصی و تحلیل کامل رو همین الان بگیر.\n` +
-    `- با موبایل: دکمه زیر را بزن.\n- با دسکتاپ/وب: شماره‌ات را به صورت متن بفرست (مثال: 0912xxxxxxx).`;
+  const askPhone = `\n\n🎁 هدیه اختصاصی و تحلیل کامل رو همین الان بگیر.\nلطفاً شماره موبایل‌ت رو با دکمه زیر ارسال کن.`;
 
-  await ctx.replyWithMarkdown(
-    header + offers + askPhone,
+  await ctx.replyWithMarkdown(header + offers + askPhone,
     Markup.keyboard([Markup.button.contactRequest("📱 ارسال شماره موبایل")])
-      .oneTime()
-      .resize()
+      .oneTime().resize()
   );
-
   st.awaitingPhone = true;
 }
 
-// ---- Bot Handlers ----
+// ---------- HANDLERS ----------
 bot.start(async (ctx) => {
   await ctx.reply(
     "✨ خوش اومدی به تست «نقشه گنج درون تو»!\n" +
-      "در کمتر از ۳ دقیقه می‌فهمی کدوم قهرمان مسیر شغلی درونت پنهان شده.\nآماده‌ای؟",
-    Markup.inlineKeyboard([
-      [Markup.button.callback("بله، شروع کنیم! ▶️", "start_quiz")]
-    ])
+    "در کمتر از ۳ دقیقه می‌فهمی کدوم قهرمان مسیر شغلی درونت پنهان شده.\nآماده‌ای؟",
+    Markup.inlineKeyboard([[Markup.button.callback("بله، شروع کنیم! ▶️", "start_quiz")]])
   );
 });
 
@@ -194,7 +132,7 @@ bot.action("start_quiz", async (ctx) => {
   await startQuiz(ctx);
 });
 
-bot.action(["ans_yes", "ans_no"], async (ctx) => {
+bot.action(["ans_yes","ans_no"], async (ctx) => {
   await ctx.answerCbQuery();
   const st = userState.get(ctx.from.id);
   if (!st) return ctx.reply("برای شروع /start رو بزن.");
@@ -204,107 +142,75 @@ bot.action(["ans_yes", "ans_no"], async (ctx) => {
   if (isYes) st.score += 1;
   st.index += 1;
 
-  await ctx.reply(
-    isYes
-      ? "✅ درست مثل کارآفرین‌ها فکر می‌کنی!"
-      : "🌱 اشکالی نداره، همه از یه جایی شروع می‌کنن."
-  );
+  const reply = isYes
+    ? POSITIVE_REPLIES[Math.floor(Math.random() * POSITIVE_REPLIES.length)]
+    : NEGATIVE_REPLIES[Math.floor(Math.random() * NEGATIVE_REPLIES.length)];
+
+  await ctx.reply(reply);
   return askNext(ctx);
 });
 
-// ---- Handle contact (mobile button)
+// ---------- CONTACT HANDLER ----------
 bot.on("contact", async (ctx) => {
   const st = userState.get(ctx.from.id);
   if (!st) return ctx.reply("برای شروع /start رو بزن.");
   st.awaitingPhone = false;
 
   const phone = ctx.message.contact.phone_number;
-  st.phone = phone;
-
   const type = getTypeByScore(st.score) || TYPES[3];
-  await sendGiftAndLead(ctx, type, phone);
-});
+  const gifts =
+    `🎁 هدیه اختصاصی تو آماده‌ی دانلوده:\n${type.giftLink}\n\n` +
+    `📣 به جامعه فراشغل بپیوند:\nhttps://t.me/+RXtqgGDCVvE0MmE0`;
 
-// ---- Handle text phone (desktop)
-bot.on("text", async (ctx) => {
-  const st = userState.get(ctx.from.id);
-  if (!st || !st.awaitingPhone) return;
+  await ctx.reply(`✅ دریافت شد! شماره‌ات ثبت شد: ${phone}`);
+  await ctx.reply(gifts, Markup.inlineKeyboard([
+    [Markup.button.url("🌐 ورود به سایت", "https://farashoghl.ir/")],
+    [Markup.button.url("💬 ارتباط در واتساپ", "https://wa.me/989357820120")]
+  ]));
 
-  const raw = ctx.message.text || "";
-  const norm = normalizePhone(raw);
-  if (!norm) {
-    return ctx.reply(
-      "❗️فرمت شماره معتبر نیست.\n" +
-        "نمونه درست: 0912xxxxxxx یا +98912xxxxxxx\n" +
-        "اگر با موبایل هستی، دکمه «📱 ارسال شماره موبایل» را بزن."
-    );
-  }
-
-  st.awaitingPhone = false;
-  st.phone = norm;
-  const type = getTypeByScore(st.score) || TYPES[3];
-  await sendGiftAndLead(ctx, type, norm);
-});
-
-// ---- Send gift, final message & admin lead ----
-async function sendGiftAndLead(ctx, type, phone) {
-  const u = ctx.from;
-
-  await ctx.reply(`✅ شماره‌ات ثبت شد: ${phone}`);
-  await ctx.reply("در حال ارسال هدیه مخصوص تو هستیم... 🎁");
-
-  try {
-    await ctx.replyWithDocument({
-      url: type.giftFile,
-      filename: "Farashoghl_Gift.pdf"
-    });
-  } catch (err) {
-    await ctx.reply(
-      "❗️ارسال مستقیم فایل ممکن نشد. می‌تونی از این لینک دانلودش کنی:\n" +
-        type.giftFile
-    );
-  }
-
-  await ctx.reply(`📣 به جامعه فراشغل بپیوند:\nhttps://t.me/+RXtqgGDCVvE0MmE0`);
-
-  // ---- Follow-up Message with Inline Buttons ----
-  await ctx.replyWithMarkdown(
-    `💬 *دوست عزیز؛*\n\n` +
-      `در *فراشغل* قراره مسیر درست زندگی و شغلی خودت رو پیدا کنی و با سرمایه کم به درآمد برسی.\n\n` +
-      `📚 پس دیگر محصولات و آموزش‌های رایگان مرکز توانمندسازی، آموزش و مشاوره کارآفرینی فراشغل را در آدرس زیر مشاهده کن:\n` +
-      `[🌐 farashoghl.ir](https://farashoghl.ir/)\n\n` +
-      `📞 جهت رزرو مشاوره و جلسات کوچینگ تخصصی شغلی در *واتساپ* به شماره زیر پیام بده:\n` +
-      `👉 09357820120\n\n` +
-      `به امید حق 🌟\n` +
-      `ثروتمند و سعادتمند در دنیا و آخرت باشید 🙏`,
-    Markup.inlineKeyboard([
-      [
-        Markup.button.url("🌐 مشاهده سایت فراشغل", "https://farashoghl.ir/"),
-        Markup.button.url("💬 پیام در واتساپ", "https://wa.me/989357820120")
-      ]
-    ])
+  await ctx.reply(
+    "دوست گرامی خوشحال هستم که این سنجش و تست را به پایان رساندی،\n" +
+    "تا 5 روز منتظر هدایا و پیشنهادات خاص ما همینجا باش.\n\n" +
+    "مرکز توانمندسازی، آموزش و مشاوره کارآفرینی فراشغل"
   );
 
-  // ---- Send lead to admin ----
+  // ---- ارسال لید به کانال ادمین ----
+  const u = ctx.from;
   const lead = [
     "📥 لید جدید «نقشه گنج»:",
     `نام: ${u.first_name || ""} ${u.last_name || ""}`.trim(),
     `یوزرنیم: @${u.username || "—"}`,
     `ID: ${u.id}`,
-    `امتیاز: ${userState.get(u.id).score}/${QUESTIONS.length}`,
+    `امتیاز: ${st.score}/${QUESTIONS.length}`,
     `تیپ: ${type.title}`,
     `موبایل: ${phone}`,
-    `پاسخ‌ها: ${userState.get(u.id).answers.join(", ")}`
+    `پاسخ‌ها: ${st.answers.join(", ")}`
   ].join("\n");
+  await ctx.telegram.sendMessage(ADMIN_CHANNEL_ID, lead, { disable_web_page_preview: true });
 
-  await ctx.telegram.sendMessage(ADMIN_CHANNEL_ID, lead, {
-    disable_web_page_preview: true
+  // ---- زمان‌بندی پیام‌های بعدی ----
+  scheduleFollowUps(ctx, u.id);
+});
+
+// ---------- FOLLOW-UP MESSAGES ----------
+function scheduleFollowUps(ctx, userId) {
+  const followUps = [
+    { delay: 5 * 60 * 1000, text: "💫 تبریک قهرمان! امروز یه قدم بزرگ برای رشد و شناخت خودت برداشتی...\n👇 تست استعدادیابی شغلی:\nhttps://farashoghl.ir/product/job-test/" },
+    { delay: 24 * 60 * 60 * 1000, text: "🎓 آموزش رایگان: کشف رسالت زندگی و مسیر شغلی 👇\nhttps://farashoghl.ir/product/kashfe-resalat/" },
+    { delay: 48 * 60 * 60 * 1000, text: "🔍 تست استعدادیابی شغلی رو انجام بده و نتیجه‌اش رو برام بفرست تا تحلیلش رو بگم 👇\nhttps://farashoghl.ir/product/job-test/" },
+    { delay: 72 * 60 * 60 * 1000, text: "🌟 یه نفر مثل تو از همین تست شروع کرد… الان مدرس و کارآفرینه!\nمشاهده کارگاه:\nhttps://farashoghl.ir/product/kashfe-resalat/" },
+    { delay: 96 * 60 * 60 * 1000, text: "🚀 سلام قهرمان مسیرت!\nفقط تا ۴۸ ساعت برای تخفیف ۵۰٪ کارگاه فرصت داری 👇\nواتساپ: 09357820120" }
+  ];
+  followUps.forEach((f, i) => {
+    setTimeout(() => {
+      bot.telegram.sendMessage(userId, f.text, {
+        disable_web_page_preview: true
+      });
+    }, f.delay);
   });
-
-  await ctx.reply("اگر دوست داری دوباره تست بدی: /start", Markup.removeKeyboard());
 }
 
-// ---- Webhook Server ----
+// ---------- WEBHOOK ----------
 app.use(bodyParser.json());
 app.use(bot.webhookCallback("/tg"));
 bot.telegram.setWebhook(`${PUBLIC_URL}/tg`);
