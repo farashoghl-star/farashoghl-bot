@@ -1,16 +1,15 @@
-// ===== Farashoghl Quiz Bot — Final Robust & Anti-Cheat =====
+// ===== Farashoghl Quiz Bot — Final Robust & Anti-Cheat (DATA_DIR=./data) =====
 import express from "express";
 import bodyParser from "body-parser";
 import { Telegraf, Markup } from "telegraf";
 import fs from "fs";
 import path from "path";
+import { fileURLToPath } from "url";
 
 // --------- ENV ----------
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const ADMIN_CHANNEL_ID = process.env.ADMIN_CHANNEL_ID; // -100...
 const PUBLIC_URL = process.env.PUBLIC_URL;             // https://...onrender.com
-const DATA_DIR = process.env.DATA_DIR || "/var/data";
-
 if (!BOT_TOKEN || !ADMIN_CHANNEL_ID || !PUBLIC_URL) {
   throw new Error("Set BOT_TOKEN, ADMIN_CHANNEL_ID, PUBLIC_URL env vars.");
 }
@@ -18,9 +17,12 @@ if (!BOT_TOKEN || !ADMIN_CHANNEL_ID || !PUBLIC_URL) {
 const bot = new Telegraf(BOT_TOKEN);
 const app = express();
 
-// --------- STORAGE PATH ----------
-const FOLLOWUPS_PATH = path.join(DATA_DIR, "followups.json");
+// --------- STORAGE PATH (no Render disk needed) ----------
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, "data");
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+const FOLLOWUPS_PATH = path.join(DATA_DIR, "followups.json");
 if (!fs.existsSync(FOLLOWUPS_PATH)) fs.writeFileSync(FOLLOWUPS_PATH, "[]", "utf8");
 
 // --------- QUIZ CONTENT ----------
@@ -384,7 +386,6 @@ setInterval(async () => {
 
 // --------- Keep-Alive (کاهش احتمال Sleep) ----------
 setInterval(() => {
-  // Node 18+ has global fetch
   fetch(`${PUBLIC_URL}/`).catch(() => {});
 }, 4 * 60 * 1000);
 
