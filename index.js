@@ -1,4 +1,4 @@
-// ===== Farashoghl Quiz Bot — Final Robust Version =====
+// ===== Farashoghl Quiz Bot — Final Robust Version (Anti-Duplicate & Score Clamp) =====
 import express from "express";
 import bodyParser from "body-parser";
 import { Telegraf, Markup } from "telegraf";
@@ -122,10 +122,21 @@ const userState = new Map();
 function getTypeByScore(score) {
   return TYPES.find((t) => score >= t.range[0] && score <= t.range[1]);
 }
+function clampScore(score, max) {
+  if (score < 0) return 0;
+  if (score > max) return max;
+  return score;
+}
 
 // --------- QUIZ FLOW ----------
 function startQuiz(ctx) {
-  userState.set(ctx.from.id, { index: 0, score: 0, answers: [] });
+  userState.set(ctx.from.id, {
+    index: 0,
+    score: 0,
+    answers: [],
+    answered: new Set(),  // جلوگیری از دوبار رأی
+    answering: false      // قفل نرم ضد کلیک‌های سریع
+  });
   return askNext(ctx);
 }
 
@@ -136,6 +147,8 @@ function askNext(ctx) {
 
   const qNum = st.index + 1;
   const text = `سؤال ${qNum} از ${QUESTIONS.length}\n\n${QUESTIONS[st.index]}`;
+
+  // کال‌بک یکتا بر اساس اندیس سؤال
   const yesCb = `ans_yes_${st.index}`;
   const noCb = `ans_no_${st.index}`;
 
@@ -150,7 +163,11 @@ function askNext(ctx) {
 async function showResult(ctx) {
   const st = userState.get(ctx.from.id);
   if (!st) return;
-  const type = getTypeByScore(st.score) || TYPES[3];
+
+  // امتیاز نهایی را کَپ کن
+  st.score = clampScore(st.score, QUESTIONS.length);
+
+  const type = getTypeByScore(st.score) || TYPES[0]; // بعد از کَپ، حتماً توی رنج‌ها می‌افتد
   st.typeKey = type.key;
 
   const header =
@@ -170,7 +187,7 @@ async function showResult(ctx) {
   st.awaitingPhone = true;
 }
 
-// --------- ACTION HANDLER (anti double click) ----------
+// --------- ACTION HANDLER (anti double click + lock + clamp) ----------
 bot.action(/ans_(yes|no)_(\d+)/, async (ctx) => {
   await ctx.answerCbQuery();
   const st = userState.get(ctx.from.id);
@@ -179,28 +196,38 @@ bot.action(/ans_(yes|no)_(\d+)/, async (ctx) => {
   const isYes = ctx.match[1] === "yes";
   const qIdx = Number(ctx.match[2]);
 
-  // کلیک روی پیام قدیمی را نادیده بگیر و کیبوردش را خالی کن
+  // اگر روی پیام قدیمی کلیک شد، نادیده بگیر و کیبورد همان پیام قدیمی را خالی کن
   if (qIdx !== st.index) {
-    try {
-      await ctx.editMessageReplyMarkup({ inline_keyboard: [] });
-    } catch (e) {}
+    try { await ctx.editMessageReplyMarkup({ inline_keyboard: [] }); } catch (e) {}
     return;
   }
 
-  st.answers.push(isYes ? "بله" : "خیر");
-  if (isYes) st.score += 1;
-  st.index += 1;
+  // قفل نرم: اگر قبلاً در حال پردازش همین سؤال بود، رد کن
+  if (st.answering) return;
 
-  // غیرفعال‌سازی دکمه‌های همین سؤال
-  try {
-    await ctx.editMessageReplyMarkup({ inline_keyboard: [] });
-  } catch (e) {}
+  // اگر این سؤال قبلاً پاسخ داده شده، نادیده بگیر
+  if (st.answered.has(qIdx)) {
+    try { await ctx.editMessageReplyMarkup({ inline_keyboard: [] }); } catch (e) {}
+    return;
+  }
+
+  st.answering = true;
+
+  // ثبت پاسخ فوری (قبل از هر await) تا کلیک‌های سریع دوم اثر نگذارند
+  st.answered.add(qIdx);
+  st.answers.push(isYes ? "بله" : "خیر");
+  if (isYes) st.score = clampScore(st.score + 1, QUESTIONS.length); // کَپ همین‌جا هم رعایت شود
+  st.index = st.index + 1;
+
+  // غیرفعال‌کردن دکمه‌های همین پیام
+  try { await ctx.editMessageReplyMarkup({ inline_keyboard: [] }); } catch (e) {}
 
   const reply = isYes
     ? POSITIVE_REPLIES[Math.floor(Math.random() * POSITIVE_REPLIES.length)]
     : NEGATIVE_REPLIES[Math.floor(Math.random() * NEGATIVE_REPLIES.length)];
   await ctx.reply(reply);
 
+  st.answering = false;
   return askNext(ctx);
 });
 
@@ -226,14 +253,17 @@ bot.on("contact", async (ctx) => {
   if (!st) return ctx.reply("برای شروع /start رو بزن.");
   st.awaitingPhone = false;
 
+  // امتیاز را دوباره کَپ کن، احتیاط
+  st.score = clampScore(st.score, QUESTIONS.length);
+
   const phone = ctx.message.contact.phone_number;
-  const type = getTypeByScore(st.score) || TYPES[3];
+  const type = getTypeByScore(st.score) || TYPES[0];
 
   await ctx.reply(`✅ دریافت شد! شماره‌ات ثبت شد: ${phone}`);
   // هدیه
   try {
     await ctx.replyWithDocument({ url: type.giftFile, filename: "Farashoghl_Gift.pdf" });
-  } catch (err) {
+  } catch {
     await ctx.reply("❗️ارسال مستقیم فایل ممکن نشد. لینک دانلود:\n" + type.giftFile);
   }
 
@@ -271,9 +301,6 @@ bot.on("contact", async (ctx) => {
   queueFollowupsForUser(u.id);
 });
 
-// اگر کاربر شماره را متنی فرستاد (وب/دسکتاپ) — دلخواه: می‌تونی اضافه کنی.
-// bot.on("text", ...)
-
 // --------- FOLLOWUPS QUEUE (disk-persistent) ----------
 function readFollowups() {
   try {
@@ -294,37 +321,37 @@ function queueFollowupsForUser(userId) {
       step: 1,
       dueAt: now + 1 * DAY,
       text:
-        "💫 تبریک قهرمان! امروز یه قدم بزرگ برای رشد و شناخت خودت برداشتی، حالا موقعش هست که یک تست استعدادیابی حرفه ای برای کشف مسیر شغلیت انجام بدی، یادت نره انتخاب درست، اولین قدم در مسیر موفقیت شغلی هستش...\n" +
+        "💫 تبریک قهرمان! امروز یه قدم بزرگ برای رشد و شناخت خودت برداشتی...\n" +
         "👇 تست استعدادیابی شغلی:\nhttps://farashoghl.ir/product/job-test/"
     },
     {
       step: 2,
       dueAt: now + 2 * DAY,
       text:
-        "🎓 «خیلیا بعد از تست ازم می‌پرسن از کجا شروع کنم؟ 👇 این آموزش رایگان " مسیریابی شغلی و کشف رسالت زندگی " دقیقاً برای توست!»  👇\n" +
+        "🎓 آموزش رایگان: کشف رسالت زندگی و مسیر شغلی 👇\n" +
         "https://farashoghl.ir/product/kashfe-resalat/"
     },
     {
       step: 3,
       dueAt: now + 3 * DAY,
       text:
-        "🔍 «می‌خوای دقیق بدونی تو چه زمینه‌ای استعداد داری؟ تست استعدادیابی تخصصی شغلی رو برات ارسال می‌کنم، حتماً الان انجام بده و برام نتیجه را ارسال کن تا تحلیلش را برات ارسال کنم. موفقیت با همین قدم‌ها شروع میشه ...» 👇\n" +
+        "🔍 تست استعدادیابی شغلی رو انجام بده و نتیجه‌اش رو برام بفرست تا تحلیلش رو بگم 👇\n" +
         "https://farashoghl.ir/product/job-test/"
     },
     {
       step: 4,
       dueAt: now + 4 * DAY,
       text:
-        "🌟 «یه نفر مثل تو از همین تستی که برات ارسال کردم، شروع کرد… الان مدرس و کارآفرینه! اگه دوست داری این مسیر را تخصصی ادامه بدی و جلوی هدر رفت زمان و هزینه‌ها را داشته باشی، پیشنهاد می‌کنم، کارگاه مسیریابی شغلی و کشف رسالت زندگی را تهیه کن. راستی رفیق اگه از لحاظ مالی در تهیه این کارگاه مشکل داشتی به پشتیبانی در واتساپ پیام بده تا شرایط ویژه‌ای برات ارائه کنی. دیگه چی از این بهتر، با خیال راحت آینده و مسیر زندگی و شغلیت را همین امروز بساز ....»!\n" +
+        "🌟 یه نفر مثل تو از همین تست شروع کرد… الان مدرس و کارآفرینه!\n" +
         "مشاهده کارگاه:\nhttps://farashoghl.ir/product/kashfe-resalat/"
     },
     {
       step: 5,
       dueAt: now + 5 * DAY,
       text:
-        "🚀 سلام قهرمان،  برای جهش واقعی آماده‌ هستی؟ !\n" +
+        "🚀 سلام قهرمان مسیرت!\n" +
         "فقط تا ۴۸ ساعت برای تخفیف ۵۰٪ کارگاه فرصت داری 👇\n" +
-        "برای مشاوره و دریافت شرایط ویژه پیام در واتساپ: 09357820120"
+        "واتساپ: 09357820120"
     }
   ].map((x) => ({ userId, sent: false, ...x }));
 
@@ -360,18 +387,11 @@ setInterval(async () => {
 
 // --------- Keep-Alive (کاهش احتمال Sleep) ----------
 setInterval(() => {
-  // Node 18+ has global fetch
-  fetch(`${PUBLIC_URL}/`)
-    .then(() => {})
-    .catch(() => {});
+  fetch(`${PUBLIC_URL}/`).catch(() => {});
 }, 4 * 60 * 1000);
 
 // --------- WEBHOOK ----------
 app.use(bodyParser.json());
-
-// لاگ ساده برای دیباگ ورودی‌های تلگرام (اختیاری)
-// app.post("/tg", (req,res,next)=>{ console.log("Incoming update"); next(); });
-
 app.use(bot.webhookCallback("/tg"));
 await bot.telegram.setWebhook(`${PUBLIC_URL}/tg`);
 
