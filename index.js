@@ -1,4 +1,4 @@
-// ===== Farashoghl Quiz Bot — Final Robust Version (Anti-Duplicate & Score Clamp) =====
+// ===== Farashoghl Quiz Bot — Final Robust & Anti-Cheat =====
 import express from "express";
 import bodyParser from "body-parser";
 import { Telegraf, Markup } from "telegraf";
@@ -8,7 +8,7 @@ import path from "path";
 // --------- ENV ----------
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const ADMIN_CHANNEL_ID = process.env.ADMIN_CHANNEL_ID; // -100...
-const PUBLIC_URL = process.env.PUBLIC_URL; // https://...onrender.com
+const PUBLIC_URL = process.env.PUBLIC_URL;             // https://...onrender.com
 const DATA_DIR = process.env.DATA_DIR || "/var/data";
 
 if (!BOT_TOKEN || !ADMIN_CHANNEL_ID || !PUBLIC_URL) {
@@ -18,7 +18,7 @@ if (!BOT_TOKEN || !ADMIN_CHANNEL_ID || !PUBLIC_URL) {
 const bot = new Telegraf(BOT_TOKEN);
 const app = express();
 
-// --------- STORAGE PATHS ----------
+// --------- STORAGE PATH ----------
 const FOLLOWUPS_PATH = path.join(DATA_DIR, "followups.json");
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 if (!fs.existsSync(FOLLOWUPS_PATH)) fs.writeFileSync(FOLLOWUPS_PATH, "[]", "utf8");
@@ -118,24 +118,18 @@ const NEGATIVE_REPLIES = [
 
 // --------- STATE ----------
 const userState = new Map();
-
 function getTypeByScore(score) {
   return TYPES.find((t) => score >= t.range[0] && score <= t.range[1]);
 }
-function clampScore(score, max) {
-  if (score < 0) return 0;
-  if (score > max) return max;
-  return score;
-}
 
-// --------- QUIZ FLOW ----------
+// ===== QUIZ FLOW =====
 function startQuiz(ctx) {
   userState.set(ctx.from.id, {
     index: 0,
-    score: 0,
-    answers: [],
-    answered: new Set(),  // جلوگیری از دوبار رأی
-    answering: false      // قفل نرم ضد کلیک‌های سریع
+    answers: [],            // [{ qIdx, yes }]
+    answered: new Set(),    // جلوگیری از دوباره‌شماری
+    processing: false,      // قفل ضد دابل‌کلیک
+    done: false
   });
   return askNext(ctx);
 }
@@ -147,10 +141,8 @@ function askNext(ctx) {
 
   const qNum = st.index + 1;
   const text = `سؤال ${qNum} از ${QUESTIONS.length}\n\n${QUESTIONS[st.index]}`;
-
-  // کال‌بک یکتا بر اساس اندیس سؤال
   const yesCb = `ans_yes_${st.index}`;
-  const noCb = `ans_no_${st.index}`;
+  const noCb  = `ans_no_${st.index}`;
 
   return ctx.reply(
     text,
@@ -160,18 +152,29 @@ function askNext(ctx) {
   );
 }
 
+// امتیاز نهایی: فقط پاسخ‌های یکتا و سقف‌گذاری
+function finalizeScore(st) {
+  if (!st || !Array.isArray(st.answers)) return 0;
+  const seen = new Set();
+  let yesCount = 0;
+  for (const a of st.answers) {
+    if (seen.has(a.qIdx)) continue;
+    seen.add(a.qIdx);
+    if (a.yes) yesCount += 1;
+  }
+  return Math.max(0, Math.min(yesCount, QUESTIONS.length)); // 0..10
+}
+
 async function showResult(ctx) {
   const st = userState.get(ctx.from.id);
-  if (!st) return;
+  if (!st || st.done) return;
 
-  // امتیاز نهایی را کَپ کن
-  st.score = clampScore(st.score, QUESTIONS.length);
+  const score = finalizeScore(st);
+  st.done = true;
 
-  const type = getTypeByScore(st.score) || TYPES[0]; // بعد از کَپ، حتماً توی رنج‌ها می‌افتد
-  st.typeKey = type.key;
-
+  const type = getTypeByScore(score) || TYPES[3];
   const header =
-    `🎉 تموم شد!\n\nامتیاز تو: *${st.score}* از *${QUESTIONS.length}*` +
+    `🎉 تموم شد!\n\nامتیاز تو: *${score}* از *${QUESTIONS.length}*` +
     `\nتیپ تو: *${type.title}*\n${type.badge}\n\n«${type.slogan}»\n\n${type.analysis}`;
   const offers = `\n\n💼 پیشنهاد ویژه برای تو:\n• ${type.offers.join("\n• ")}`;
   const askPhone =
@@ -184,54 +187,51 @@ async function showResult(ctx) {
       .oneTime()
       .resize()
   );
-  st.awaitingPhone = true;
 }
 
-// --------- ACTION HANDLER (anti double click + lock + clamp) ----------
+// ===== ACTION HANDLER (Anti old/double click) =====
 bot.action(/ans_(yes|no)_(\d+)/, async (ctx) => {
   await ctx.answerCbQuery();
   const st = userState.get(ctx.from.id);
-  if (!st) return;
+  if (!st || st.done) return;
 
-  const isYes = ctx.match[1] === "yes";
-  const qIdx = Number(ctx.match[2]);
+  // قفل ضد دابل‌کلیک
+  if (st.processing) { try { await ctx.editMessageReplyMarkup({ inline_keyboard: [] }); } catch {} return; }
+  st.processing = true;
 
-  // اگر روی پیام قدیمی کلیک شد، نادیده بگیر و کیبورد همان پیام قدیمی را خالی کن
-  if (qIdx !== st.index) {
-    try { await ctx.editMessageReplyMarkup({ inline_keyboard: [] }); } catch (e) {}
-    return;
+  try {
+    const isYes = ctx.match[1] === "yes";
+    const qIdx  = Number(ctx.match[2]);
+
+    // رد کلیک‌های قدیمی یا تکراری
+    if (st.answered.has(qIdx) || qIdx !== st.index) {
+      try { await ctx.editMessageReplyMarkup({ inline_keyboard: [] }); } catch {}
+      return;
+    }
+
+    // ثبت پاسخ یکتا
+    st.answered.add(qIdx);
+    st.answers.push({ qIdx, yes: isYes });
+
+    // خاموش‌کردن دکمه‌های همین پیام
+    try { await ctx.editMessageReplyMarkup({ inline_keyboard: [] }); } catch {}
+
+    // فیدبک
+    const msg = isYes
+      ? POSITIVE_REPLIES[Math.floor(Math.random() * POSITIVE_REPLIES.length)]
+      : NEGATIVE_REPLIES[Math.floor(Math.random() * NEGATIVE_REPLIES.length)];
+    await ctx.reply(msg);
+
+    // سؤال بعدی یا نتیجه
+    st.index += 1;
+    if (st.index >= QUESTIONS.length) return showResult(ctx);
+    return askNext(ctx);
+  } finally {
+    st.processing = false;
   }
-
-  // قفل نرم: اگر قبلاً در حال پردازش همین سؤال بود، رد کن
-  if (st.answering) return;
-
-  // اگر این سؤال قبلاً پاسخ داده شده، نادیده بگیر
-  if (st.answered.has(qIdx)) {
-    try { await ctx.editMessageReplyMarkup({ inline_keyboard: [] }); } catch (e) {}
-    return;
-  }
-
-  st.answering = true;
-
-  // ثبت پاسخ فوری (قبل از هر await) تا کلیک‌های سریع دوم اثر نگذارند
-  st.answered.add(qIdx);
-  st.answers.push(isYes ? "بله" : "خیر");
-  if (isYes) st.score = clampScore(st.score + 1, QUESTIONS.length); // کَپ همین‌جا هم رعایت شود
-  st.index = st.index + 1;
-
-  // غیرفعال‌کردن دکمه‌های همین پیام
-  try { await ctx.editMessageReplyMarkup({ inline_keyboard: [] }); } catch (e) {}
-
-  const reply = isYes
-    ? POSITIVE_REPLIES[Math.floor(Math.random() * POSITIVE_REPLIES.length)]
-    : NEGATIVE_REPLIES[Math.floor(Math.random() * NEGATIVE_REPLIES.length)];
-  await ctx.reply(reply);
-
-  st.answering = false;
-  return askNext(ctx);
 });
 
-// --------- START ----------
+// ===== START =====
 bot.start(async (ctx) => {
   await ctx.reply(
     "✨ خوش اومدی به تست «نقشه گنج درون تو»!\n" +
@@ -241,25 +241,22 @@ bot.start(async (ctx) => {
     ])
   );
 });
-
 bot.action("start_quiz", async (ctx) => {
   await ctx.answerCbQuery();
   await startQuiz(ctx);
 });
 
-// --------- CONTACT ----------
+// ===== CONTACT (gift + links + followups) =====
 bot.on("contact", async (ctx) => {
   const st = userState.get(ctx.from.id);
   if (!st) return ctx.reply("برای شروع /start رو بزن.");
-  st.awaitingPhone = false;
 
-  // امتیاز را دوباره کَپ کن، احتیاط
-  st.score = clampScore(st.score, QUESTIONS.length);
+  const score = finalizeScore(st);                  // امتیاز مطمئن
+  const type  = getTypeByScore(score) || TYPES[3];
 
   const phone = ctx.message.contact.phone_number;
-  const type = getTypeByScore(st.score) || TYPES[0];
-
   await ctx.reply(`✅ دریافت شد! شماره‌ات ثبت شد: ${phone}`);
+
   // هدیه
   try {
     await ctx.replyWithDocument({ url: type.giftFile, filename: "Farashoghl_Gift.pdf" });
@@ -290,18 +287,18 @@ bot.on("contact", async (ctx) => {
     `نام: ${u.first_name || ""} ${u.last_name || ""}`.trim(),
     `یوزرنیم: @${u.username || "—"}`,
     `ID: ${u.id}`,
-    `امتیاز: ${st.score}/${QUESTIONS.length}`,
+    `امتیاز: ${score}/${QUESTIONS.length}`, // فقط از finalizeScore
     `تیپ: ${type.title}`,
     `موبایل: ${phone}`,
-    `پاسخ‌ها: ${st.answers.join(", ")}`
+    `پاسخ‌ها: ${st.answers.map(a => `${a.qIdx+1}:${a.yes?"بله":"خیر"}`).join(" | ")}`
   ].join("\n");
   await ctx.telegram.sendMessage(ADMIN_CHANNEL_ID, lead, { disable_web_page_preview: true });
 
-  // صف فالوآپ‌های ۵ روزه (پایدار روی دیسک)
+  // فالوآپ‌های ۵روزه مقاوم به sleep
   queueFollowupsForUser(u.id);
 });
 
-// --------- FOLLOWUPS QUEUE (disk-persistent) ----------
+// ===== FOLLOWUPS (persistent queue) =====
 function readFollowups() {
   try {
     const raw = fs.readFileSync(FOLLOWUPS_PATH, "utf8");
@@ -360,7 +357,7 @@ function queueFollowupsForUser(userId) {
   writeFollowups(all);
 }
 
-// Dispatcher: هر ۵ دقیقه هرچه موعدش رسیده بفرست
+// Dispatcher: هر ۵ دقیقه هرچه موعدش رسیده بفرست (مقاوم به sleep/restart)
 setInterval(async () => {
   const all = readFollowups();
   const now = Date.now();
@@ -387,10 +384,11 @@ setInterval(async () => {
 
 // --------- Keep-Alive (کاهش احتمال Sleep) ----------
 setInterval(() => {
+  // Node 18+ has global fetch
   fetch(`${PUBLIC_URL}/`).catch(() => {});
 }, 4 * 60 * 1000);
 
-// --------- WEBHOOK ----------
+// ===== WEBHOOK =====
 app.use(bodyParser.json());
 app.use(bot.webhookCallback("/tg"));
 await bot.telegram.setWebhook(`${PUBLIC_URL}/tg`);
